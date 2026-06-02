@@ -443,6 +443,7 @@ export default function AdminLookup() {
                             <div className="min-w-[8rem]">
                               <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Row Index</p>
                               <Select
+                                noSort
                                 value={row.sub_field_row_index}
                                 onChange={(val) => handleSubFieldRowIndex(idx, val)}
                                 options={[

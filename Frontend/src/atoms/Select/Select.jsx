@@ -8,6 +8,7 @@ export default function Select({
   options = [],
   placeholder = 'Select...',
   multiple = false,
+  noSort = false,
   className = '',
 }) {
   const [open, setOpen] = useState(false)
@@ -65,7 +66,7 @@ export default function Select({
     }
   }, [open, computePosition])
 
-  const sortedOptions = [...options].sort((a, b) => {
+  const sortedOptions = noSort ? [...options] : [...options].sort((a, b) => {
     const la = (a.label || a.value || '').toLowerCase()
     const lb = (b.label || b.value || '').toLowerCase()
     if (la === 'n/a') return -1
