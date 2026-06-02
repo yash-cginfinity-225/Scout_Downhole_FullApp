@@ -5,7 +5,7 @@ import SearchBar from '../molecules/SearchBar/SearchBar'
 import Pagination from '../molecules/Pagination/Pagination'
 import Button from '../atoms/Button/Button'
 import Spinner from '../atoms/Spinner/Spinner'
-import { Download, ArrowLeft, Eye } from 'lucide-react'
+import { Download, ArrowLeft, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 export default function TableView({ tableKey, title }) {
@@ -19,14 +19,33 @@ export default function TableView({ tableKey, title }) {
   const [exporting, setExporting] = useState(false)
   const [subTableData, setSubTableData] = useState(null)
   const [subTableColumn, setSubTableColumn] = useState('')
-  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [selectedPdf, setSelectedPdf] = useState(null)
+  const [descPopup, setDescPopup] = useState(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const res = await getTableData(tableKey, { search, page, page_size: 50 })
-      setData(res.data.data || [])
-      setColumns(res.data.columns || [])
+      const rawData = res.data.data || []
+      const rawColumns = res.data.columns || []
+
+      // Transform data: add file_name from path, remove path column
+      const transformed = rawData.map((row) => {
+        const newRow = { ...row }
+        if (newRow.path) {
+          newRow.file_name = newRow.path.split('/').pop()
+        } else {
+          newRow.file_name = ''
+        }
+        return newRow
+      })
+
+      // Reorder columns: file_name first, then remove 'path'
+      const filteredCols = rawColumns.filter(c => c !== 'path')
+      const displayCols = ['file_name', ...filteredCols]
+
+      setData(transformed)
+      setColumns(displayCols)
       setTotalPages(res.data.total_pages || 1)
       setTotal(res.data.total || 0)
     } catch {
@@ -51,10 +70,14 @@ export default function TableView({ tableKey, title }) {
       const res = await exportTableData(tableKey, search)
       const exportData = res.data.data || []
 
-      // Flatten complex objects for Excel
       const flatData = exportData.map((row) => {
         const flat = {}
+        // Add file_name
+        if (row.path) {
+          flat.file_name = row.path.split('/').pop()
+        }
         for (const [key, value] of Object.entries(row)) {
+          if (key === 'path') continue
           if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
             flat[key] = JSON.stringify(value)
           } else {
@@ -75,10 +98,8 @@ export default function TableView({ tableKey, title }) {
     }
   }
 
-  let debounceTimer
   const handleSearchChange = (e) => {
-    const value = e.target.value
-    setSearch(value)
+    setSearch(e.target.value)
   }
 
   const handleViewSubTable = (subData, colName) => {
@@ -91,36 +112,15 @@ export default function TableView({ tableKey, title }) {
     setSubTableColumn('')
   }
 
-  const handleRowClick = (row) => {
-    setSelectedRecord(row)
-  }
-
-  const handleCloseRecord = () => {
-    setSelectedRecord(null)
-  }
-
-  const getPdfFilename = (record) => {
-    if (!record || !record.path) return null
-    // path is like "dbfs:/Volumes/databricksnonprod/pdf_ingestion_data/pdf/filename.pdf"
-    const fullPath = record.path
-    const filename = fullPath.split('/').pop()
-    return filename
-  }
-
-  const handleExportRecord = () => {
-    if (!selectedRecord) return
-    const flat = {}
-    for (const [key, value] of Object.entries(selectedRecord)) {
-      if (typeof value === 'object' && value !== null) {
-        flat[key] = JSON.stringify(value)
-      } else {
-        flat[key] = value
-      }
+  const handleFileClick = (row) => {
+    const filename = row.file_name || (row.path ? row.path.split('/').pop() : '')
+    if (filename) {
+      setSelectedPdf(filename)
     }
-    const ws = XLSX.utils.json_to_sheet([flat])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Record')
-    XLSX.writeFile(wb, `${tableKey}_record_export.xlsx`)
+  }
+
+  const handleDescriptionClick = (text, fileName, colName) => {
+    setDescPopup({ text, fileName, colName })
   }
 
   const handleExportSubTable = () => {
@@ -143,42 +143,29 @@ export default function TableView({ tableKey, title }) {
   }
 
   // PDF viewer
-  if (selectedRecord) {
-    const pdfFilename = getPdfFilename(selectedRecord)
-    const pdfUrl = pdfFilename ? getFileViewUrl(pdfFilename) : null
+  if (selectedPdf) {
+    const pdfUrl = getFileViewUrl(selectedPdf)
 
     return (
       <div className="flex flex-col h-[calc(100vh-7rem)]">
         <div className="flex items-center justify-between mb-[1rem] gap-[1rem] flex-wrap shrink-0">
           <div className="flex items-baseline gap-[0.75rem]">
-            <Button variant="ghost" size="md" onClick={handleCloseRecord}>
+            <Button variant="ghost" size="md" onClick={() => setSelectedPdf(null)}>
               <ArrowLeft size={16} />
               Back
             </Button>
             <h1 className="text-[1.5rem] font-bold text-gray-900">
-              {pdfFilename || 'Document View'}
+              {selectedPdf}
             </h1>
           </div>
-          <div className="flex items-center gap-[0.75rem]">
-            <Button variant="secondary" size="md" onClick={handleExportRecord}>
-              <Download size={16} />
-              Export Excel
-            </Button>
-          </div>
         </div>
-        {pdfUrl ? (
-          <div className="flex-1 bg-white rounded-[0.75rem] shadow-sm border border-gray-200 overflow-hidden">
-            <iframe
-              src={pdfUrl}
-              className="w-full h-full border-0"
-              title="PDF Viewer"
-            />
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-white rounded-[0.75rem] shadow-sm border border-gray-200">
-            <p className="text-gray-500 text-[1rem]">No PDF available for this record</p>
-          </div>
-        )}
+        <div className="flex-1 bg-white rounded-[0.75rem] shadow-sm border border-gray-200 overflow-hidden">
+          <iframe
+            src={pdfUrl}
+            className="w-full h-full border-0"
+            title="PDF Viewer"
+          />
+        </div>
       </div>
     )
   }
@@ -210,6 +197,28 @@ export default function TableView({ tableKey, title }) {
 
   return (
     <div>
+      {/* Description Popup */}
+      {descPopup && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-[1rem]" onClick={() => setDescPopup(null)}>
+          <div className="bg-white rounded-[0.75rem] shadow-2xl max-w-[52rem] w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-[1.5rem] py-[1.25rem] border-b border-gray-200 bg-gray-900 rounded-t-[0.75rem]">
+              <div>
+                <h3 className="text-[1.125rem] font-bold text-white capitalize">{(descPopup.colName || 'Details').replace(/_/g, ' ')}</h3>
+                <p className="text-[0.75rem] text-gray-300 mt-[0.25rem] break-all">{descPopup.fileName}</p>
+              </div>
+              <button onClick={() => setDescPopup(null)} className="w-[2rem] h-[2rem] flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors shrink-0 ml-[1rem]">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-[1.5rem] overflow-y-auto">
+              <div className="bg-gray-50 border border-gray-200 rounded-[0.5rem] p-[1.25rem]">
+                <p className="text-[0.875rem] text-gray-700 leading-relaxed whitespace-pre-wrap">{descPopup.text}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-[1.25rem] gap-[1rem] flex-wrap">
         <div className="flex items-baseline gap-[0.75rem]">
           <h1 className="text-[1.5rem] font-bold text-gray-900">{title}</h1>
@@ -234,7 +243,13 @@ export default function TableView({ tableKey, title }) {
         </div>
       ) : (
         <>
-          <DataTable columns={columns} data={data} onViewSubTable={handleViewSubTable} onRowClick={handleRowClick} />
+          <DataTable
+            columns={columns}
+            data={data}
+            onViewSubTable={handleViewSubTable}
+            onFileClick={handleFileClick}
+            onDescriptionClick={handleDescriptionClick}
+          />
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}

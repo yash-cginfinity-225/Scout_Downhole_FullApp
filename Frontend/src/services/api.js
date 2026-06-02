@@ -53,4 +53,10 @@ export const deleteLookupColumn = (id) =>
 
 export const getTableStructures = () => api.get('/api/admin/table-structures')
 
+export const getMappedData = (params = {}) =>
+  api.get('/api/admin/mapped-data', { params })
+
+export const exportMappedData = (search = '') =>
+  api.get('/api/admin/mapped-data/export', { params: { search } })
+
 export default api

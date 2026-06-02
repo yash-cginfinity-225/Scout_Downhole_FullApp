@@ -1,0 +1,15 @@
+When i am viewing the admin page, i see only the mappings i have created. I want to store those mappings and also ue that mappings.
+When edit is clicked then the option comes right and when saved store the schema.
+But also show the resultant table in the page.
+
+Use the columns mapped to show the data fetch the file name as the first column and the data assosaited with all the tables that are mapped.
+
+So i want the table with those mappings and also allow export to excel functionality.
+
+
+
+For all pages the first column is the Path display on the name of the file extracting it from the path and that will be downloaded. 
+Also in default the description should look shunk if too big but if user clicks on it then show a pop up with the description in it a cross icon on the top right and the name of file on top left.
+Also when a record is clicked we open the pdf bind that to only the File name column that will be created.
+
+Also we have data that is like table inside the table EG: component data . Allow the user to also map those sub columns by adding another seelctor to select those columns if a parent column is selected. And the all functionality will fetch all the data.

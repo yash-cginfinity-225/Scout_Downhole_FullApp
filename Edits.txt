@@ -1,0 +1,2 @@
+Style the description Box when opened. 
+Remove the color and underline from the File name and also display the full file name in the 
