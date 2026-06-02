@@ -14,13 +14,14 @@ import Pagination from '../molecules/Pagination/Pagination'
 import Button from '../atoms/Button/Button'
 import Input from '../atoms/Input/Input'
 import Spinner from '../atoms/Spinner/Spinner'
+import Select from '../atoms/Select/Select'
 import { Plus, Trash2, Edit3, Save, X, Settings, Download, ArrowLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 const TABLE_OPTIONS = [
   { key: 'bha_tally', label: 'BHA Tally' },
   { key: 'bha_report', label: 'BHA Report' },
-  { key: 'bha_extracted', label: 'Extracted Reports' },
+  { key: 'bha_extracted', label: 'Performance Reports' },
   { key: 'motor_performance', label: 'Motor Performance' },
 ]
 
@@ -81,6 +82,7 @@ export default function AdminLookup() {
           bha_extracted: (item.mapped_columns || '').split(',')[2]?.trim() || 'N/A',
           motor_performance: (item.mapped_columns || '').split(',')[3]?.trim() || 'N/A',
           sub_fields: item.sub_fields ? item.sub_fields.split(',').map(s => s.trim()).filter(Boolean) : [],
+          sub_field_row_index: item.sub_field_row_index || null,
         }))
         setRows(parsed)
       } else {
@@ -117,6 +119,7 @@ export default function AdminLookup() {
     bha_extracted: 'N/A',
     motor_performance: 'N/A',
     sub_fields: [],
+    sub_field_row_index: null,
   })
 
   const getColumnsForTable = (tableKey) => {
@@ -186,14 +189,15 @@ export default function AdminLookup() {
     setRows(updated)
   }
 
-  const handleSubFieldToggle = (index, fieldName) => {
+  const handleSubFieldChange = (index, selectedFields) => {
     const updated = [...rows]
-    const current = updated[index].sub_fields || []
-    if (current.includes(fieldName)) {
-      updated[index].sub_fields = current.filter(f => f !== fieldName)
-    } else {
-      updated[index].sub_fields = [...current, fieldName]
-    }
+    updated[index].sub_fields = selectedFields
+    setRows(updated)
+  }
+
+  const handleSubFieldRowIndex = (index, rowIdx) => {
+    const updated = [...rows]
+    updated[index].sub_field_row_index = rowIdx
     setRows(updated)
   }
 
@@ -206,6 +210,7 @@ export default function AdminLookup() {
       mapped_tables: TABLE_OPTIONS.filter((t) => r[t.key] !== 'N/A').map((t) => t.key),
       mapped_columns: TABLE_OPTIONS.map((t) => r[t.key] || 'N/A'),
       sub_fields: r.sub_fields || [],
+      sub_field_row_index: r.sub_field_row_index,
     }))
 
     try {
@@ -267,14 +272,11 @@ export default function AdminLookup() {
   useEffect(() => {
     if (editMode) {
       document.body.style.overflow = 'hidden'
-      document.body.style.pointerEvents = 'none'
     } else {
       document.body.style.overflow = ''
-      document.body.style.pointerEvents = ''
     }
     return () => {
       document.body.style.overflow = ''
-      document.body.style.pointerEvents = ''
     }
   }, [editMode])
 
@@ -355,13 +357,17 @@ export default function AdminLookup() {
         <div className="bg-white rounded-[0.75rem] p-[2rem] shadow-sm border border-gray-200 mb-[1.5rem]">
           <h2 className="text-[1.25rem] font-bold text-gray-900 mb-[0.5rem]">Start Creating Your Lookup Table</h2>
           <p className="text-[0.875rem] text-gray-500">Define column names and select the corresponding field from each table. Use N/A if a column doesn't apply to a table.</p>
+          <Button variant="primary" size="md" className="mt-[1rem]" onClick={() => setEditMode(true)}>
+            <Edit3 size={16} />
+            Get Started
+          </Button>
         </div>
       ) : null}
 
       {/* Edit Overlay */}
       {editMode && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-[1rem]" style={{ pointerEvents: 'all' }} onClick={() => setEditMode(false)}>
-          <div className="bg-white rounded-[0.75rem] shadow-xl w-full max-w-[75rem] max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-[1rem]" onClick={() => setEditMode(false)}>
+          <div className="bg-white rounded-[0.75rem] shadow-xl w-[95vw] h-[95vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {/* Overlay Header */}
             <div className="flex items-center justify-between px-[1.5rem] py-[1rem] border-b border-gray-200 shrink-0">
               <h2 className="text-[1.125rem] font-bold text-gray-900">Edit Mappings</h2>
@@ -401,18 +407,15 @@ export default function AdminLookup() {
                       </div>
                       {TABLE_OPTIONS.map((t) => (
                         <div key={t.key} className="px-[1rem] py-[0.75rem] text-[0.8125rem]">
-                          <select
-                            className="w-full px-[0.625rem] py-[0.5rem] border border-gray-300 rounded-[0.25rem] text-[0.75rem] bg-white text-gray-900 cursor-pointer outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                          <Select
                             value={row[t.key] || 'N/A'}
-                            onChange={(e) => handleRowChange(idx, t.key, e.target.value)}
-                          >
-                            <option value="N/A">N/A</option>
-                            {getColumnsForTable(t.key).map((col) => (
-                              <option key={col} value={col}>
-                                {col}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(val) => handleRowChange(idx, t.key, val)}
+                            options={[
+                              { value: 'N/A', label: 'N/A' },
+                              ...getColumnsForTable(t.key).map((col) => ({ value: col, label: col.replace(/_/g, ' ') }))
+                            ]}
+                            placeholder="Select column"
+                          />
                         </div>
                       ))}
                       <div className="px-[1rem] py-[0.75rem] min-w-[3.75rem] text-center">
@@ -424,20 +427,32 @@ export default function AdminLookup() {
 
                     {/* Sub-field selector for nested/array columns */}
                     {isArrayColumn(row) && (
-                      <div className="px-[1rem] py-[0.5rem] bg-gray-50 border-t border-gray-100">
-                        <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Sub-columns (select fields from nested data):</p>
-                        <div className="flex flex-wrap gap-[0.375rem]">
-                          {getSubFieldOptions(row).map((sf) => (
-                            <label key={sf} className="inline-flex items-center gap-[0.25rem] text-[0.75rem] text-gray-700 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={(row.sub_fields || []).includes(sf)}
-                                onChange={() => handleSubFieldToggle(idx, sf)}
-                                className="rounded border-gray-300 text-primary focus:ring-primary"
+                      <div className="px-[1rem] py-[0.75rem] bg-gray-50 border-t border-gray-100">
+                        <div className="flex items-start gap-[1rem] flex-wrap">
+                          <div className="flex-1 min-w-[14rem]">
+                            <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Sub-columns</p>
+                            <Select
+                              multiple
+                              value={row.sub_fields || []}
+                              onChange={(selected) => handleSubFieldChange(idx, selected)}
+                              options={getSubFieldOptions(row).map((sf) => ({ value: sf, label: sf.replace(/_/g, ' ') }))}
+                              placeholder="Select sub-columns..."
+                            />
+                          </div>
+                          {(row.sub_fields || []).length > 0 && (
+                            <div className="min-w-[8rem]">
+                              <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Row Index</p>
+                              <Select
+                                value={row.sub_field_row_index}
+                                onChange={(val) => handleSubFieldRowIndex(idx, val)}
+                                options={[
+                                  { value: null, label: 'All rows' },
+                                  ...Array.from({ length: 20 }, (_, i) => ({ value: i + 1, label: `Row ${i + 1}` }))
+                                ]}
+                                placeholder="Select row..."
                               />
-                              {sf}
-                            </label>
-                          ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

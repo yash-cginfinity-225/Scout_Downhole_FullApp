@@ -40,7 +40,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
             content = await file.read()
 
             resp = await client.put(
-                _volume_url(safe_name),
+                _volume_url(safe_name) + "?overwrite=true",
                 content=content,
                 headers={**HEADERS, "Content-Type": "application/octet-stream"},
             )
