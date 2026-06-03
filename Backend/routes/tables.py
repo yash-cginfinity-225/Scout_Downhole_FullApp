@@ -11,6 +11,9 @@ TABLE_MAP = {
     "bha_report": settings.BHA_REPORT_TABLE,
     "bha_extracted": settings.BHA_EXTRACTED_TABLE,
     "motor_performance": settings.MOTOR_PERFORMANCE_TABLE,
+    "scout_bha_report": settings.SCOUT_BHA_REPORT_TABLE,
+    "scout_failure_report": settings.SCOUT_FAILURE_REPORT_TABLE,
+    "scout_motor_performance": settings.SCOUT_MOTOR_PERFORMANCE_TABLE,
 }
 
 

@@ -13,6 +13,11 @@ const CATEGORIES = {
     { path: '/bha-report', label: 'BHA Report' },
     { path: '/motor-performance', label: 'Motor Performance Report' },
   ],
+  'Scout Reports': [
+    { path: '/scout-bha-report', label: 'BHA Report' },
+    { path: '/scout-failure-report', label: 'Failure Report' },
+    { path: '/scout-motor-performance', label: 'Motor Performance' },
+  ],
 }
 
 function NavDropdown({ label, items }) {

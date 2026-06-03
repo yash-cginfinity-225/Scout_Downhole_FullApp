@@ -40,6 +40,9 @@ function App() {
             <Route path="bha-report" element={<TableView tableKey="bha_report" title="BHA Report" />} />
             <Route path="bha-extracted" element={<TableView tableKey="bha_extracted" title="BHA Performance Reports" />} />
             <Route path="motor-performance" element={<TableView tableKey="motor_performance" title="Motor Performance" />} />
+            <Route path="scout-bha-report" element={<TableView tableKey="scout_bha_report" title="Scout BHA Report" />} />
+            <Route path="scout-failure-report" element={<TableView tableKey="scout_failure_report" title="Scout Failure Report" />} />
+            <Route path="scout-motor-performance" element={<TableView tableKey="scout_motor_performance" title="Scout Motor Performance" />} />
             <Route path="sub-table" element={<SubTableView />} />
             <Route
               path="admin"

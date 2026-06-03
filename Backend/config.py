@@ -17,6 +17,10 @@ class Settings:
     BHA_EXTRACTED_TABLE: str = os.getenv("BHA_EXTRACTED_TABLE", "databricksnonprod.default.bha_extracted_reports")
     MOTOR_PERFORMANCE_TABLE: str = os.getenv("MOTOR_PERFORMANCE_TABLE", "databricksnonprod.default.halliburton_motor_performance")
 
+    SCOUT_BHA_REPORT_TABLE: str = os.getenv("SCOUT_BHA_REPORT_TABLE", "databricksnonprod.default.scout_bha_report")
+    SCOUT_FAILURE_REPORT_TABLE: str = os.getenv("SCOUT_FAILURE_REPORT_TABLE", "databricksnonprod.default.scout_failure_report")
+    SCOUT_MOTOR_PERFORMANCE_TABLE: str = os.getenv("SCOUT_MOTOR_PERFORMANCE_TABLE", "databricksnonprod.default.scout_motor_performance_report")
+
     DATABRICKS_VOLUME_PATH: str = os.getenv("DATABRICKS_VOLUME_PATH", "/Volumes/databricksnonprod/pdf_ingestion_data/pdf")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
