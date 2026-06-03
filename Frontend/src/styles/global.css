@@ -31,21 +31,25 @@ a {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #F3F4F6;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #9CA3AF;
-  border-radius: 4px;
+  background: #374151;
+  border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6B7280;
+  background: #111827;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @keyframes spin {

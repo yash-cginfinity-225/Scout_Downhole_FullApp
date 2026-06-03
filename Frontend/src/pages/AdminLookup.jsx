@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   getLookupTable,
   createLookupTable,
   deleteLookupColumn,
   getTableStructures,
   getMappedData,
-  exportMappedData,
   getFileViewUrl,
 } from '../services/api'
 import DataTable from '../molecules/DataTable/DataTable'
@@ -33,14 +32,17 @@ export default function AdminLookup() {
   const [rows, setRows] = useState([])
 
   // Mapped data state
-  const [mappedData, setMappedData] = useState([])
+  const [allMappedData, setAllMappedData] = useState([])
   const [mappedColumns, setMappedColumns] = useState([])
   const [mappedLoading, setMappedLoading] = useState(false)
+  const [loadingMoreMapped, setLoadingMoreMapped] = useState(false)
   const [mappedSearch, setMappedSearch] = useState('')
-  const [mappedPage, setMappedPage] = useState(1)
-  const [mappedTotalPages, setMappedTotalPages] = useState(1)
+  const [mappedDisplayPage, setMappedDisplayPage] = useState(1)
+  const [mappedPageSize, setMappedPageSize] = useState(10)
   const [mappedTotal, setMappedTotal] = useState(0)
+  const [mappedFetchedCount, setMappedFetchedCount] = useState(0)
   const [exporting, setExporting] = useState(false)
+  const mappedAbortRef = useRef(false)
 
   // PDF viewer state
   const [selectedPdf, setSelectedPdf] = useState(null)
@@ -56,11 +58,72 @@ export default function AdminLookup() {
     fetchData()
   }, [])
 
+  const fetchMappedData = useCallback(async () => {
+    mappedAbortRef.current = true
+    await new Promise(r => setTimeout(r, 0))
+    mappedAbortRef.current = false
+
+    setMappedLoading(true)
+    setAllMappedData([])
+    setMappedFetchedCount(0)
+    setMappedDisplayPage(1)
+
+    try {
+      const res = await getMappedData({ search: mappedSearch, page: 1, page_size: 100 })
+      if (mappedAbortRef.current) return
+
+      const data = res.data.data || []
+      const cols = res.data.columns || []
+      const total = res.data.total || 0
+      const totalPages = res.data.total_pages || 1
+
+      setMappedColumns(cols.map(c => c === 'path' ? 'file_name' : c))
+      setMappedTotal(total)
+      setAllMappedData(data.map(row => {
+        if ('path' in row && !('file_name' in row)) {
+          const { path, ...rest } = row
+          return { file_name: (path || '').split('/').pop(), ...rest }
+        }
+        return row
+      }))
+      setMappedFetchedCount(data.length)
+      setMappedLoading(false)
+
+      if (totalPages > 1) {
+        setLoadingMoreMapped(true)
+        let accumulated = [...data]
+        for (let p = 2; p <= totalPages; p++) {
+          if (mappedAbortRef.current) return
+          const nextRes = await getMappedData({ search: mappedSearch, page: p, page_size: 100 })
+          if (mappedAbortRef.current) return
+          const nextData = nextRes.data.data || []
+          const transformed = nextData.map(row => {
+            if ('path' in row && !('file_name' in row)) {
+              const { path, ...rest } = row
+              return { file_name: (path || '').split('/').pop(), ...rest }
+            }
+            return row
+          })
+          accumulated = [...accumulated, ...transformed]
+          setAllMappedData(accumulated)
+          setMappedFetchedCount(accumulated.length)
+        }
+        setLoadingMoreMapped(false)
+      }
+    } catch {
+      setAllMappedData([])
+      setMappedColumns([])
+      setMappedLoading(false)
+      setLoadingMoreMapped(false)
+    }
+  }, [mappedSearch])
+
   useEffect(() => {
     if (lookupData.length > 0) {
       fetchMappedData()
+      return () => { mappedAbortRef.current = true }
     }
-  }, [mappedSearch, mappedPage, lookupData])
+  }, [fetchMappedData, lookupData])
 
   const fetchData = async () => {
     setLoading(true)
@@ -74,16 +137,36 @@ export default function AdminLookup() {
       setTableStructures(structRes.data || {})
 
       if (data.length > 0) {
-        const parsed = data.map((item) => ({
-          id: item.id,
-          column_name: item.column_name || '',
-          bha_tally: (item.mapped_columns || '').split(',')[0]?.trim() || 'N/A',
-          bha_report: (item.mapped_columns || '').split(',')[1]?.trim() || 'N/A',
-          bha_extracted: (item.mapped_columns || '').split(',')[2]?.trim() || 'N/A',
-          motor_performance: (item.mapped_columns || '').split(',')[3]?.trim() || 'N/A',
-          sub_fields: item.sub_fields ? item.sub_fields.split(',').map(s => s.trim()).filter(Boolean) : [],
-          sub_field_row_index: item.sub_field_row_index || null,
-        }))
+        const parsed = data.map((item) => {
+          // Parse sub_fields: JSON dict or legacy comma-sep
+          let subFields = {}
+          const sfRaw = item.sub_fields || ''
+          if (sfRaw.trim().startsWith('{')) {
+            try { subFields = JSON.parse(sfRaw) } catch { subFields = {} }
+          } else if (sfRaw.trim()) {
+            // Legacy: apply to all tables
+            const legacy = sfRaw.split(',').map(s => s.trim()).filter(Boolean)
+            TABLE_OPTIONS.forEach(t => { subFields[t.key] = legacy })
+          }
+
+          // Parse sub_field_row_index: JSON dict
+          let rowIndex = {}
+          const riRaw = item.sub_field_row_index || ''
+          if (riRaw.trim().startsWith('{')) {
+            try { rowIndex = JSON.parse(riRaw) } catch { rowIndex = {} }
+          }
+
+          return {
+            id: item.id,
+            column_name: item.column_name || '',
+            bha_tally: (item.mapped_columns || '').split(',')[0]?.trim() || 'N/A',
+            bha_report: (item.mapped_columns || '').split(',')[1]?.trim() || 'N/A',
+            bha_extracted: (item.mapped_columns || '').split(',')[2]?.trim() || 'N/A',
+            motor_performance: (item.mapped_columns || '').split(',')[3]?.trim() || 'N/A',
+            sub_fields: subFields,
+            sub_field_row_index: rowIndex,
+          }
+        })
         setRows(parsed)
       } else {
         setRows([createEmptyRow()])
@@ -95,21 +178,14 @@ export default function AdminLookup() {
     }
   }
 
-  const fetchMappedData = async () => {
-    setMappedLoading(true)
-    try {
-      const res = await getMappedData({ search: mappedSearch, page: mappedPage, page_size: 50 })
-      setMappedData(res.data.data || [])
-      setMappedColumns(res.data.columns || [])
-      setMappedTotalPages(res.data.total_pages || 1)
-      setMappedTotal(res.data.total || 0)
-    } catch {
-      setMappedData([])
-      setMappedColumns([])
-    } finally {
-      setMappedLoading(false)
-    }
-  }
+  // Client-side pagination over allMappedData
+  const mappedTotalDisplayPages = Math.max(1, Math.ceil(mappedTotal / mappedPageSize))
+  const mappedMaxAvailablePage = Math.max(1, Math.ceil(allMappedData.length / mappedPageSize))
+  const mappedEffectivePage = Math.min(mappedDisplayPage, mappedMaxAvailablePage)
+  const mappedData = allMappedData.slice(
+    (mappedEffectivePage - 1) * mappedPageSize,
+    mappedEffectivePage * mappedPageSize
+  )
 
   const createEmptyRow = () => ({
     id: null,
@@ -118,8 +194,8 @@ export default function AdminLookup() {
     bha_report: 'N/A',
     bha_extracted: 'N/A',
     motor_performance: 'N/A',
-    sub_fields: [],
-    sub_field_row_index: null,
+    sub_fields: {},
+    sub_field_row_index: {},
   })
 
   const getColumnsForTable = (tableKey) => {
@@ -129,29 +205,31 @@ export default function AdminLookup() {
 
   const isArrayColumn = (row) => {
     for (const t of TABLE_OPTIONS) {
-      const colName = row[t.key]
-      if (colName && colName !== 'N/A') {
-        const struct = tableStructures[t.key] || []
-        const colDef = struct.find(s => (s.col_name || s.column_name) === colName)
-        if (colDef) {
-          const dataType = (colDef.data_type || '').toLowerCase()
-          if (dataType.includes('array') || dataType.includes('string')) {
-            if (colName.includes('component') || colName.includes('data') || colName.includes('configuration') || colName.includes('stations') || colName.includes('stabilizers') || colName.includes('drill_string')) {
-              return true
-            }
-          }
+      if (isArrayColumnForTable(row, t.key)) return true
+    }
+    return false
+  }
+
+  const isArrayColumnForTable = (row, tableKey) => {
+    const colName = row[tableKey]
+    if (!colName || colName === 'N/A') return false
+    const struct = tableStructures[tableKey] || []
+    const colDef = struct.find(s => (s.col_name || s.column_name) === colName)
+    if (colDef) {
+      const dataType = (colDef.data_type || '').toLowerCase()
+      if (dataType.includes('array') || dataType.includes('string')) {
+        if (colName.includes('component') || colName.includes('data') || colName.includes('configuration') || colName.includes('stations') || colName.includes('stabilizers') || colName.includes('drill_string')) {
+          return true
         }
       }
     }
     return false
   }
 
-  const getSubFieldOptions = (row) => {
-    for (const t of TABLE_OPTIONS) {
-      const colName = row[t.key]
-      if (colName && colName !== 'N/A') {
-        return getKnownSubFields(colName)
-      }
+  const getSubFieldOptions = (row, tableKey) => {
+    const colName = row[tableKey]
+    if (colName && colName !== 'N/A') {
+      return getKnownSubFields(colName)
     }
     return []
   }
@@ -189,15 +267,15 @@ export default function AdminLookup() {
     setRows(updated)
   }
 
-  const handleSubFieldChange = (index, selectedFields) => {
+  const handleSubFieldChange = (index, tableKey, selectedFields) => {
     const updated = [...rows]
-    updated[index].sub_fields = selectedFields
+    updated[index].sub_fields = { ...updated[index].sub_fields, [tableKey]: selectedFields }
     setRows(updated)
   }
 
-  const handleSubFieldRowIndex = (index, rowIdx) => {
+  const handleSubFieldRowIndex = (index, tableKey, rowIdx) => {
     const updated = [...rows]
-    updated[index].sub_field_row_index = rowIdx
+    updated[index].sub_field_row_index = { ...updated[index].sub_field_row_index, [tableKey]: rowIdx }
     setRows(updated)
   }
 
@@ -209,8 +287,8 @@ export default function AdminLookup() {
       column_name: r.column_name,
       mapped_tables: TABLE_OPTIONS.filter((t) => r[t.key] !== 'N/A').map((t) => t.key),
       mapped_columns: TABLE_OPTIONS.map((t) => r[t.key] || 'N/A'),
-      sub_fields: r.sub_fields || [],
-      sub_field_row_index: r.sub_field_row_index,
+      sub_fields: r.sub_fields || {},
+      sub_field_row_index: r.sub_field_row_index || {},
     }))
 
     try {
@@ -222,25 +300,26 @@ export default function AdminLookup() {
     }
   }
 
-  const handleExportMapped = async () => {
+  const handleExportMapped = () => {
+    if (!allMappedData.length) return
     setExporting(true)
     try {
-      const res = await exportMappedData(mappedSearch)
-      const exportData = res.data.data || []
-      const flatData = exportData.map((row) => {
-        const flat = {}
-        for (const [key, value] of Object.entries(row)) {
-          if (key.startsWith('_')) continue
-          if (Array.isArray(value)) {
-            flat[key] = value.join('; ')
-          } else if (typeof value === 'object' && value !== null) {
-            flat[key] = JSON.stringify(value)
-          } else {
-            flat[key] = value
+      const flatData = allMappedData
+        .filter(row => !mappedSearch || mappedColumns.some(col => String(row[col] ?? '').toLowerCase().includes(mappedSearch.toLowerCase())))
+        .map((row) => {
+          const flat = {}
+          for (const col of mappedColumns) {
+            const value = row[col]
+            if (Array.isArray(value)) {
+              flat[col] = value.join('; ')
+            } else if (typeof value === 'object' && value !== null) {
+              flat[col] = JSON.stringify(value)
+            } else {
+              flat[col] = value ?? ''
+            }
           }
-        }
-        return flat
-      })
+          return flat
+        })
       const ws = XLSX.utils.json_to_sheet(flatData)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Mapped Data')
@@ -253,8 +332,7 @@ export default function AdminLookup() {
   }
 
   const handleFileNameClick = (row) => {
-    const path = row._path || ''
-    const filename = path.split('/').pop()
+    const filename = row.file_name || (row._path || '').split('/').pop()
     if (filename) {
       setSelectedPdf(filename)
     }
@@ -425,35 +503,39 @@ export default function AdminLookup() {
                       </div>
                     </div>
 
-                    {/* Sub-field selector for nested/array columns */}
+                    {/* Sub-field selectors per table */}
                     {isArrayColumn(row) && (
                       <div className="px-[1rem] py-[0.75rem] bg-gray-50 border-t border-gray-100">
                         <div className="flex items-start gap-[1rem] flex-wrap">
-                          <div className="flex-1 min-w-[14rem]">
-                            <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Sub-columns</p>
-                            <Select
-                              multiple
-                              value={row.sub_fields || []}
-                              onChange={(selected) => handleSubFieldChange(idx, selected)}
-                              options={getSubFieldOptions(row).map((sf) => ({ value: sf, label: sf.replace(/_/g, ' ') }))}
-                              placeholder="Select sub-columns..."
-                            />
-                          </div>
-                          {(row.sub_fields || []).length > 0 && (
-                            <div className="min-w-[8rem]">
-                              <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Row Index</p>
-                              <Select
-                                noSort
-                                value={row.sub_field_row_index}
-                                onChange={(val) => handleSubFieldRowIndex(idx, val)}
-                                options={[
-                                  { value: null, label: 'All rows' },
-                                  ...Array.from({ length: 20 }, (_, i) => ({ value: i + 1, label: `Row ${i + 1}` }))
-                                ]}
-                                placeholder="Select row..."
-                              />
-                            </div>
-                          )}
+                          {TABLE_OPTIONS.map((t) => (
+                            isArrayColumnForTable(row, t.key) && (
+                              <div key={t.key} className="min-w-[14rem] flex-1">
+                                <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">{t.label} — Sub-columns</p>
+                                <Select
+                                  multiple
+                                  value={(row.sub_fields || {})[t.key] || []}
+                                  onChange={(selected) => handleSubFieldChange(idx, t.key, selected)}
+                                  options={getSubFieldOptions(row, t.key).map((sf) => ({ value: sf, label: sf.replace(/_/g, ' ') }))}
+                                  placeholder="Select sub-columns..."
+                                />
+                                {((row.sub_fields || {})[t.key] || []).length > 0 && (
+                                  <div className="mt-[0.5rem]">
+                                    <p className="text-[0.6875rem] font-semibold text-gray-600 uppercase tracking-wide mb-[0.375rem]">Row Index</p>
+                                    <Select
+                                      noSort
+                                      value={(row.sub_field_row_index || {})[t.key] || null}
+                                      onChange={(val) => handleSubFieldRowIndex(idx, t.key, val)}
+                                      options={[
+                                        { value: null, label: 'All rows' },
+                                        ...Array.from({ length: 20 }, (_, i) => ({ value: i + 1, label: `Row ${i + 1}` }))
+                                      ]}
+                                      placeholder="Select row..."
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          ))}
                         </div>
                       </div>
                     )}
@@ -478,12 +560,14 @@ export default function AdminLookup() {
           <div className="flex items-center justify-between mb-[1.25rem] gap-[1rem] flex-wrap">
             <div className="flex items-baseline gap-[0.75rem]">
               <h2 className="text-[1.25rem] font-bold text-gray-900">Mapped Data</h2>
-              <span className="text-[0.875rem] text-gray-500 font-medium">{mappedTotal} records</span>
+              <span className="text-[0.875rem] text-gray-500 font-medium">
+                {loadingMoreMapped ? `${mappedFetchedCount} / ${mappedTotal} loaded` : `${mappedTotal} records`}
+              </span>
             </div>
             <div className="flex items-center gap-[0.75rem]">
               <SearchBar
                 value={mappedSearch}
-                onChange={(e) => { setMappedSearch(e.target.value); setMappedPage(1) }}
+                onChange={(e) => setMappedSearch(e.target.value)}
                 placeholder="Search mapped data..."
               />
               <Button variant="secondary" size="md" onClick={handleExportMapped} disabled={exporting}>
@@ -516,7 +600,7 @@ export default function AdminLookup() {
                 onDescriptionClick={handleDescriptionClick}
                 onViewSubTable={handleViewSubTable}
               />
-              <Pagination page={mappedPage} totalPages={mappedTotalPages} onPageChange={setMappedPage} />
+              <Pagination page={mappedDisplayPage} totalPages={mappedTotalDisplayPages} onPageChange={setMappedDisplayPage} pageSize={mappedPageSize} onPageSizeChange={(size) => { setMappedPageSize(size); setMappedDisplayPage(1) }} />
             </>
           )}
         </div>
@@ -645,7 +729,7 @@ function MappedDataTable({ columns, data, onFileNameClick, onDescriptionClick, o
 
   return (
     <div className="bg-white rounded-[0.75rem] shadow-sm overflow-hidden border border-gray-200">
-      <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+      <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
         <table className="w-full text-[0.8125rem]" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
             <tr>

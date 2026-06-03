@@ -267,15 +267,15 @@ export default function TableView({ tableKey, title }) {
         </div>
       )}
 
-      <div className="mb-[1.25rem]">
-        <div className="flex items-baseline gap-[0.75rem] mb-[0.75rem]">
+      <div className="flex items-center justify-between gap-[0.75rem] flex-wrap mb-[1.25rem]">
+        <div className="flex items-baseline gap-[0.75rem]">
           <h1 className="text-[1.5rem] font-bold text-gray-900">{title}</h1>
           <span className="text-[0.875rem] text-gray-500 font-medium">
             {total} records
             {loadingMore && ` (loaded ${fetchedCount}...)`}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-[0.75rem] flex-wrap">
+        <div className="flex items-center gap-[0.75rem]">
           <SearchBar
             value={search}
             onChange={handleSearchChange}

@@ -1,0 +1,154 @@
+import json
+
+LOOKUP_TABLE = "databricksnonprod.default.lookup_table_config"
+
+TABLE_MAP = {
+    "bha_tally":         "databricksnonprod.default.halliburton_bha_tally",
+    "bha_report":        "databricksnonprod.default.halliburton_bha_report",
+    "bha_extracted":     "databricksnonprod.default.bha_extracted_reports",
+    "motor_performance": "databricksnonprod.default.halliburton_motor_performance",
+}
+
+TABLE_KEYS = ["bha_tally", "bha_report", "bha_extracted", "motor_performance"]
+
+# ── 1. Read lookup config ─────────────────────────────────────────────────────
+lookup_rows = spark.table(LOOKUP_TABLE).collect()
+
+mappings = []
+for row in lookup_rows:
+    mapped_tables = [t.strip() for t in (row["mapped_tables"] or "").split(",") if t.strip()]
+    mapped_columns = [c.strip() for c in (row["mapped_columns"] or "").split(",")]
+
+    # Build dict: table_key -> source_column
+    table_col_map = {}
+    for i, tbl in enumerate(mapped_tables):
+        col = mapped_columns[i].strip() if i < len(mapped_columns) else "N/A"
+        table_col_map[tbl] = col
+
+    # Parse sub_fields JSON: {"table_key": ["field1", "field2"]}
+    sub_fields_raw = row["sub_fields"] or ""
+    sub_fields = {}
+    if sub_fields_raw:
+        try:
+            sub_fields = json.loads(sub_fields_raw) if isinstance(sub_fields_raw, str) else sub_fields_raw
+        except Exception:
+            sub_fields = {}
+
+    # Parse sub_field_row_index JSON: {"table_key": index}
+    row_index_raw = row["sub_field_row_index"] or ""
+    sub_field_row_index = {}
+    if row_index_raw:
+        try:
+            sub_field_row_index = json.loads(row_index_raw) if isinstance(row_index_raw, str) else row_index_raw
+        except Exception:
+            sub_field_row_index = {}
+
+    mappings.append({
+        "column_name": row["column_name"],
+        "table_col_map": table_col_map,
+        "sub_fields": sub_fields,
+        "sub_field_row_index": sub_field_row_index,
+    })
+
+# ── 2. Determine output columns ──────────────────────────────────────────────
+output_columns = ["path", "source_table"]
+for m in mappings:
+    if m["column_name"] not in output_columns:
+        output_columns.append(m["column_name"])
+
+# ── 3. Query each source table and build unified rows ─────────────────────────
+all_rows = []
+
+for table_key in TABLE_KEYS:
+    full_table = TABLE_MAP[table_key]
+
+    # Determine which source columns are needed from this table
+    needed_cols = set()
+    for m in mappings:
+        src_col = m["table_col_map"].get(table_key, "N/A")
+        if src_col and src_col != "N/A":
+            needed_cols.add(src_col)
+
+    df = spark.table(full_table)
+    avail = df.columns
+    avail_lower = {c.lower(): c for c in avail}
+
+    # Always include path; add other needed columns that exist (case-insensitive)
+    select_cols = ["path"]
+    for c in needed_cols:
+        if c.lower() in avail_lower and c.lower() != "path":
+            select_cols.append(avail_lower[c.lower()])
+    df_rows = df.select(*select_cols).collect()
+
+    for row in df_rows:
+        path_val = row["path"] or ""
+
+        # Start with N/A for all columns
+        unified = {c: "N/A" for c in output_columns}
+        unified["path"] = path_val
+        unified["source_table"] = table_key
+
+        for m in mappings:
+            src_col = m["table_col_map"].get(table_key, "N/A")
+
+            # No mapping for this table → leave as N/A
+            if not src_col or src_col == "N/A":
+                continue
+
+            try:
+                value = row[src_col]
+            except Exception:
+                continue
+
+            # Parse JSON array strings into Python lists
+            if isinstance(value, str) and value.strip().startswith("["):
+                try:
+                    value = json.loads(value)
+                except Exception:
+                    pass
+
+            # Check if this table has sub_fields for this mapping
+            table_sub_fields = m["sub_fields"].get(table_key, [])
+            row_index = m["sub_field_row_index"].get(table_key, None)
+
+            if table_sub_fields:
+                # Sub_fields specified → need to dig into the array
+                if not isinstance(value, list):
+                    unified[m["column_name"]] = "N/A"
+                elif row_index is not None and isinstance(row_index, int):
+                    # Specific row index requested
+                    if row_index < len(value):
+                        item = value[row_index]
+                        item_dict = item.asDict() if hasattr(item, "asDict") else (item if isinstance(item, dict) else {})
+                        extracted = []
+                        for sf in table_sub_fields:
+                            if sf in item_dict and item_dict[sf] is not None:
+                                extracted.append(str(item_dict[sf]))
+                        unified[m["column_name"]] = ", ".join(extracted) if extracted else "N/A"
+                    else:
+                        unified[m["column_name"]] = "N/A"
+                else:
+                    # No specific row index → extract sub_field from all rows
+                    extracted = []
+                    for item in value:
+                        item_dict = item.asDict() if hasattr(item, "asDict") else (item if isinstance(item, dict) else {})
+                        for sf in table_sub_fields:
+                            if sf in item_dict and item_dict[sf] is not None:
+                                extracted.append(str(item_dict[sf]))
+                    unified[m["column_name"]] = ", ".join(extracted) if extracted else "N/A"
+            else:
+                # No sub_field → return the column data directly
+                if isinstance(value, list):
+                    unified[m["column_name"]] = ", ".join(str(v) for v in value if v is not None) or "N/A"
+                else:
+                    unified[m["column_name"]] = str(value) if value is not None else "N/A"
+
+        all_rows.append(unified)
+
+# ── 4. Build final DataFrame and display ──────────────────────────────────────
+if all_rows:
+    result_df = spark.createDataFrame(all_rows)
+    result_df = result_df.select(*output_columns)
+    display(result_df)
+else:
+    print("No mapped data found. Check that lookup_table_config has entries and source tables are populated.")
