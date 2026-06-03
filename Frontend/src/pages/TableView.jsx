@@ -18,7 +18,7 @@ export default function TableView({ tableKey, title }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [displayPage, setDisplayPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
+  const [pageSize, setPageSize] = useState(10)
   const [total, setTotal] = useState(0)
   const [fetchedCount, setFetchedCount] = useState(0)
   const [exporting, setExporting] = useState(false)
@@ -111,11 +111,6 @@ export default function TableView({ tableKey, title }) {
   const maxAvailablePage = Math.max(1, Math.ceil(allData.length / pageSize))
   const effectivePage = Math.min(displayPage, maxAvailablePage)
   const displayData = allData.slice((effectivePage - 1) * pageSize, effectivePage * pageSize)
-
-  const handlePageSizeChange = (newSize) => {
-    setPageSize(newSize)
-    setDisplayPage(1)
-  }
 
   const handleExport = async () => {
     setExporting(true)
@@ -306,7 +301,7 @@ export default function TableView({ tableKey, title }) {
             onFileClick={handleFileClick}
             onDescriptionClick={handleDescriptionClick}
           />
-          <Pagination page={effectivePage} totalPages={totalDisplayPages} onPageChange={setDisplayPage} pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
+          <Pagination page={effectivePage} totalPages={totalDisplayPages} onPageChange={setDisplayPage} pageSize={pageSize} onPageSizeChange={(n) => { setPageSize(n); setDisplayPage(1) }} />
           {loadingMore && (
             <div className="flex items-center justify-center gap-[0.5rem] py-[0.5rem]">
               <Spinner size="sm" />

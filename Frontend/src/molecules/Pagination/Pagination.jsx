@@ -1,8 +1,6 @@
 import Button from '../../atoms/Button/Button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
-
 export default function Pagination({ page, totalPages, onPageChange, pageSize, onPageSizeChange }) {
   const getPageNumbers = () => {
     const pages = []
@@ -20,7 +18,7 @@ export default function Pagination({ page, totalPages, onPageChange, pageSize, o
 
   return (
     <div className="flex items-center justify-between gap-[1rem] py-[1rem] flex-wrap border-t border-gray-200 mt-[0.5rem]">
-      {/* Per-page selector */}
+      {/* Rows per page */}
       <div className="flex items-center gap-[0.5rem]">
         <span className="text-[0.8125rem] text-gray-500 whitespace-nowrap">Rows per page</span>
         <select
@@ -28,9 +26,7 @@ export default function Pagination({ page, totalPages, onPageChange, pageSize, o
           onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
           className="px-[0.5rem] py-[0.375rem] text-[0.8125rem] font-medium text-gray-700 bg-white border border-gray-300 rounded-[0.375rem] outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 cursor-pointer"
         >
-          {PAGE_SIZE_OPTIONS.map(n => (
-            <option key={n} value={n}>{n}</option>
-          ))}
+          {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
         </select>
       </div>
 
