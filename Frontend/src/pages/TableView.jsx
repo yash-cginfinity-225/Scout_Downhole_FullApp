@@ -171,7 +171,7 @@ export default function TableView({ tableKey, title }) {
       setSelectedFile({ name: filename, type: 'excel', loading: true })
       try {
         const resp = await getFileAsArrayBuffer(filename, fullPath)
-        const workbook = XLSX.read(new Uint8Array(resp.data), { type: 'array' })
+        const workbook = XLSX.read(new Uint8Array(resp.data), { type: 'array', cellStyles: true })
         const activeSheet = workbook.SheetNames[0]
         setSelectedFile({ name: filename, type: 'excel', loading: false, workbook, activeSheet, error: false })
       } catch {
@@ -252,9 +252,85 @@ export default function TableView({ tableKey, title }) {
     if (isExcel && selectedFile.workbook) {
       const { workbook, activeSheet } = selectedFile
       const sheet = workbook.Sheets[activeSheet]
-      const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
-      const headers = sheetData[0] || []
-      const rows = sheetData.slice(1)
+
+      // --- style helpers ---
+      const argbToHex = (argb) => {
+        if (!argb || argb === '00000000' || argb === '000000') return null
+        return `#${argb.length === 8 ? argb.slice(2) : argb}`
+      }
+      const getCellStyle = (cell) => {
+        if (!cell?.s) return {}
+        const s = cell.s
+        const style = { padding: '3px 8px' }
+        if (s.fill?.fgColor?.rgb) {
+          const bg = argbToHex(s.fill.fgColor.rgb)
+          if (bg && bg !== '#000000') style.backgroundColor = bg
+        }
+        if (s.font) {
+          if (s.font.bold) style.fontWeight = 'bold'
+          if (s.font.italic) style.fontStyle = 'italic'
+          if (s.font.underline) style.textDecoration = 'underline'
+          if (s.font.color?.rgb) {
+            const fc = argbToHex(s.font.color.rgb)
+            if (fc) style.color = fc
+          }
+          if (s.font.sz) style.fontSize = `${Math.round(s.font.sz * 1.33)}px`
+        }
+        if (s.alignment) {
+          if (s.alignment.horizontal) style.textAlign = s.alignment.horizontal
+          if (s.alignment.wrapText) style.whiteSpace = 'pre-wrap'
+          else style.whiteSpace = 'nowrap'
+        }
+        if (s.border) {
+          const borderSide = (b) => b?.style ? `1px solid ${argbToHex(b.color?.rgb) || '#999'}` : undefined
+          const t = borderSide(s.border.top)
+          const b = borderSide(s.border.bottom)
+          const l = borderSide(s.border.left)
+          const r = borderSide(s.border.right)
+          if (t) style.borderTop = t
+          if (b) style.borderBottom = b
+          if (l) style.borderLeft = l
+          if (r) style.borderRight = r
+        }
+        return style
+      }
+
+      // --- range, merges, col widths ---
+      const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }
+      const merges = sheet['!merges'] || []
+      const colDefs = sheet['!cols'] || []
+
+      const mergeMap = {}
+      const coveredCells = new Set()
+      merges.forEach((m) => {
+        mergeMap[`${m.s.r},${m.s.c}`] = { rowSpan: m.e.r - m.s.r + 1, colSpan: m.e.c - m.s.c + 1 }
+        for (let r = m.s.r; r <= m.e.r; r++) {
+          for (let c = m.s.c; c <= m.e.c; c++) {
+            if (r !== m.s.r || c !== m.s.c) coveredCells.add(`${r},${c}`)
+          }
+        }
+      })
+
+      const numRows = range.e.r - range.s.r + 1
+
+      // --- build row data ---
+      const tableRows = []
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const cells = []
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          if (coveredCells.has(`${r},${c}`)) continue
+          const cellAddr = XLSX.utils.encode_cell({ r, c })
+          const cell = sheet[cellAddr]
+          const merge = mergeMap[`${r},${c}`]
+          cells.push({
+            value: cell ? (cell.w ?? (cell.v != null ? String(cell.v) : '')) : '',
+            style: getCellStyle(cell),
+            rowSpan: merge?.rowSpan || 1,
+            colSpan: merge?.colSpan || 1,
+          })
+        }
+        tableRows.push(cells)
+      }
 
       return (
         <div className="flex flex-col h-[calc(100vh-7rem)]">
@@ -265,7 +341,7 @@ export default function TableView({ tableKey, title }) {
                 Back
               </Button>
               <h1 className="text-[1.5rem] font-bold text-gray-900">{selectedFile.name}</h1>
-              <span className="text-[0.8125rem] text-gray-500">{rows.length} rows</span>
+              <span className="text-[0.8125rem] text-gray-500">{numRows} rows</span>
             </div>
           </div>
 
@@ -290,28 +366,34 @@ export default function TableView({ tableKey, title }) {
 
           {/* Spreadsheet table */}
           <div className="flex-1 bg-white rounded-[0.75rem] shadow-sm border border-gray-200 overflow-auto">
-            <table className="min-w-full text-[0.8125rem] border-collapse">
-              <thead className="sticky top-0 bg-gray-900 text-white z-10">
-                <tr>
-                  {headers.map((h, i) => (
-                    <th
-                      key={i}
-                      className="px-[0.75rem] py-[0.625rem] text-left font-semibold whitespace-nowrap border-r border-gray-700 last:border-r-0"
-                    >
-                      {h !== '' ? String(h) : `Col ${i + 1}`}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+            <table className="text-[0.8125rem] border-collapse" style={{ borderSpacing: 0 }}>
+              {colDefs.length > 0 && (
+                <colgroup>
+                  {Array.from({ length: range.e.c - range.s.c + 1 }, (_, i) => {
+                    const col = colDefs[i]
+                    const wpx = col?.wpx ? col.wpx : col?.wch ? col.wch * 7 : 80
+                    return <col key={i} style={{ width: `${wpx}px`, minWidth: `${wpx}px` }} />
+                  })}
+                </colgroup>
+              )}
               <tbody>
-                {rows.map((row, ri) => (
-                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    {headers.map((_, ci) => (
+                {tableRows.map((cells, ri) => (
+                  <tr key={ri}>
+                    {cells.map((cell, ci) => (
                       <td
                         key={ci}
-                        className="px-[0.75rem] py-[0.5rem] text-gray-700 border-r border-b border-gray-100 last:border-r-0 whitespace-nowrap max-w-[20rem] overflow-hidden text-ellipsis"
+                        rowSpan={cell.rowSpan > 1 ? cell.rowSpan : undefined}
+                        colSpan={cell.colSpan > 1 ? cell.colSpan : undefined}
+                        style={{
+                          border: '1px solid #d1d5db',
+                          verticalAlign: 'middle',
+                          maxWidth: '24rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          ...cell.style,
+                        }}
                       >
-                        {row[ci] !== undefined && row[ci] !== '' ? String(row[ci]) : ''}
+                        {cell.value}
                       </td>
                     ))}
                   </tr>

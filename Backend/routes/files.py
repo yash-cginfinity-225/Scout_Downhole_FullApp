@@ -142,16 +142,19 @@ async def download_file(filename: str):
 async def view_file(filename: str, path: Optional[str] = Query(None)):
     # If full volume path is provided, use it directly (from database path column)
     if path:
+        # Strip dbfs: prefix stored by Databricks in the path column
+        clean_path = path[len("dbfs:"):] if path.startswith("dbfs:") else path
+
         # Validate path is within allowed volumes
         allowed_prefixes = [settings.DATABRICKS_VOLUME_PATH, settings.DATABRICKS_EXCEL_VOLUME_PATH]
-        if not any(path.startswith(prefix) for prefix in allowed_prefixes):
+        if not any(clean_path.startswith(prefix) for prefix in allowed_prefixes):
             raise HTTPException(status_code=400, detail="Invalid file path")
-        if ".." in path:
+        if ".." in clean_path:
             raise HTTPException(status_code=400, detail="Invalid file path")
 
-        name = path.rsplit("/", 1)[-1]
+        name = clean_path.rsplit("/", 1)[-1]
         # URL-encode each path segment after the volume base
-        encoded_path = "/".join(quote(segment, safe="") for segment in path.split("/"))
+        encoded_path = "/".join(quote(segment, safe="") for segment in clean_path.split("/"))
         view_url = f"{settings.databricks_base_url}/api/2.0/fs/files{encoded_path}"
     else:
         # Fallback: use filename only with configured volume path
