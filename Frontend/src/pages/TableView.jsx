@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getTableData, exportTableData, getFileViewUrl } from '../services/api'
+import { getTableData, exportTableData, getFileViewUrl, getFileAsArrayBuffer } from '../services/api'
 import DataTable from '../molecules/DataTable/DataTable'
 import SearchBar from '../molecules/SearchBar/SearchBar'
 import Pagination from '../molecules/Pagination/Pagination'
@@ -24,7 +24,8 @@ export default function TableView({ tableKey, title }) {
   const [exporting, setExporting] = useState(false)
   const [subTableData, setSubTableData] = useState(null)
   const [subTableColumn, setSubTableColumn] = useState('')
-  const [selectedPdf, setSelectedPdf] = useState(null)
+  const [selectedFile, setSelectedFile] = useState(null)
+  // selectedFile: null | { name, type: 'pdf' } | { name, type: 'excel', loading, workbook, activeSheet, error }
   const [descPopup, setDescPopup] = useState(null)
   const abortRef = useRef(false)
 
@@ -160,10 +161,24 @@ export default function TableView({ tableKey, title }) {
     setSubTableColumn('')
   }
 
-  const handleFileClick = (row) => {
+  const handleFileClick = async (row) => {
     const filename = row.file_name || (row.path ? row.path.split('/').pop() : '')
-    if (filename) {
-      setSelectedPdf(filename)
+    if (!filename) return
+
+    const fullPath = row.path || null
+    const ext = filename.split('.').pop().toLowerCase()
+    if (ext === 'xlsx' || ext === 'xls') {
+      setSelectedFile({ name: filename, type: 'excel', loading: true })
+      try {
+        const resp = await getFileAsArrayBuffer(filename, fullPath)
+        const workbook = XLSX.read(new Uint8Array(resp.data), { type: 'array' })
+        const activeSheet = workbook.SheetNames[0]
+        setSelectedFile({ name: filename, type: 'excel', loading: false, workbook, activeSheet, error: false })
+      } catch {
+        setSelectedFile({ name: filename, type: 'excel', loading: false, workbook: null, activeSheet: null, error: true })
+      }
+    } else {
+      setSelectedFile({ name: filename, type: 'pdf', path: fullPath })
     }
   }
 
@@ -190,20 +205,136 @@ export default function TableView({ tableKey, title }) {
     XLSX.writeFile(wb, `${subTableColumn || 'sub_table'}_export.xlsx`)
   }
 
-  // PDF viewer
-  if (selectedPdf) {
-    const pdfUrl = getFileViewUrl(selectedPdf)
+  // File viewer (PDF or Excel)
+  if (selectedFile) {
+    const isExcel = selectedFile.type === 'excel'
 
+    // Loading state while fetching Excel
+    if (isExcel && selectedFile.loading) {
+      return (
+        <div className="flex flex-col h-[calc(100vh-7rem)]">
+          <div className="flex items-center gap-[1rem] mb-[1rem] shrink-0">
+            <Button variant="ghost" size="md" onClick={() => setSelectedFile(null)}>
+              <ArrowLeft size={16} />
+              Back
+            </Button>
+            <h1 className="text-[1.5rem] font-bold text-gray-900">{selectedFile.name}</h1>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex items-center gap-[0.75rem] text-gray-500">
+              <Spinner size="lg" />
+              <span className="text-[0.875rem]">Loading spreadsheet…</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Error state
+    if (isExcel && selectedFile.error) {
+      return (
+        <div className="flex flex-col h-[calc(100vh-7rem)]">
+          <div className="flex items-center gap-[1rem] mb-[1rem] shrink-0">
+            <Button variant="ghost" size="md" onClick={() => setSelectedFile(null)}>
+              <ArrowLeft size={16} />
+              Back
+            </Button>
+            <h1 className="text-[1.5rem] font-bold text-gray-900">{selectedFile.name}</h1>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-red-500 text-[0.875rem]">Failed to load spreadsheet. Please try again.</p>
+          </div>
+        </div>
+      )
+    }
+
+    // Excel viewer
+    if (isExcel && selectedFile.workbook) {
+      const { workbook, activeSheet } = selectedFile
+      const sheet = workbook.Sheets[activeSheet]
+      const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+      const headers = sheetData[0] || []
+      const rows = sheetData.slice(1)
+
+      return (
+        <div className="flex flex-col h-[calc(100vh-7rem)]">
+          <div className="flex items-center justify-between mb-[1rem] gap-[1rem] flex-wrap shrink-0">
+            <div className="flex items-baseline gap-[0.75rem]">
+              <Button variant="ghost" size="md" onClick={() => setSelectedFile(null)}>
+                <ArrowLeft size={16} />
+                Back
+              </Button>
+              <h1 className="text-[1.5rem] font-bold text-gray-900">{selectedFile.name}</h1>
+              <span className="text-[0.8125rem] text-gray-500">{rows.length} rows</span>
+            </div>
+          </div>
+
+          {/* Sheet tabs */}
+          {workbook.SheetNames.length > 1 && (
+            <div className="flex gap-[0.375rem] mb-[0.75rem] flex-wrap shrink-0">
+              {workbook.SheetNames.map((sheetName) => (
+                <button
+                  key={sheetName}
+                  onClick={() => setSelectedFile((prev) => ({ ...prev, activeSheet: sheetName }))}
+                  className={`px-[0.875rem] py-[0.375rem] text-[0.8125rem] font-medium rounded-[0.375rem] border transition-colors cursor-pointer ${
+                    sheetName === activeSheet
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  {sheetName}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Spreadsheet table */}
+          <div className="flex-1 bg-white rounded-[0.75rem] shadow-sm border border-gray-200 overflow-auto">
+            <table className="min-w-full text-[0.8125rem] border-collapse">
+              <thead className="sticky top-0 bg-gray-900 text-white z-10">
+                <tr>
+                  {headers.map((h, i) => (
+                    <th
+                      key={i}
+                      className="px-[0.75rem] py-[0.625rem] text-left font-semibold whitespace-nowrap border-r border-gray-700 last:border-r-0"
+                    >
+                      {h !== '' ? String(h) : `Col ${i + 1}`}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => (
+                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    {headers.map((_, ci) => (
+                      <td
+                        key={ci}
+                        className="px-[0.75rem] py-[0.5rem] text-gray-700 border-r border-b border-gray-100 last:border-r-0 whitespace-nowrap max-w-[20rem] overflow-hidden text-ellipsis"
+                      >
+                        {row[ci] !== undefined && row[ci] !== '' ? String(row[ci]) : ''}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )
+    }
+
+    // PDF viewer
+    const pdfUrl = getFileViewUrl(selectedFile.name, selectedFile.path)
     return (
       <div className="flex flex-col h-[calc(100vh-7rem)]">
         <div className="flex items-center justify-between mb-[1rem] gap-[1rem] flex-wrap shrink-0">
           <div className="flex items-baseline gap-[0.75rem]">
-            <Button variant="ghost" size="md" onClick={() => setSelectedPdf(null)}>
+            <Button variant="ghost" size="md" onClick={() => setSelectedFile(null)}>
               <ArrowLeft size={16} />
               Back
             </Button>
             <h1 className="text-[1.5rem] font-bold text-gray-900">
-              {selectedPdf}
+              {selectedFile.name}
             </h1>
           </div>
         </div>

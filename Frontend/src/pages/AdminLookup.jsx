@@ -333,8 +333,9 @@ export default function AdminLookup() {
 
   const handleFileNameClick = (row) => {
     const filename = row.file_name || (row._path || '').split('/').pop()
+    const fullPath = row._path || row.path || null
     if (filename) {
-      setSelectedPdf(filename)
+      setSelectedPdf({ name: filename, path: fullPath })
     }
   }
 
@@ -360,7 +361,8 @@ export default function AdminLookup() {
 
   // PDF viewer
   if (selectedPdf) {
-    const pdfUrl = getFileViewUrl(selectedPdf)
+    const pdfUrl = getFileViewUrl(selectedPdf.name || selectedPdf, selectedPdf.path || null)
+    const pdfName = selectedPdf.name || selectedPdf
     return (
       <div className="flex flex-col h-[calc(100vh-7rem)]">
         <div className="flex items-center justify-between mb-[1rem] gap-[1rem] flex-wrap shrink-0">
@@ -369,7 +371,7 @@ export default function AdminLookup() {
               <ArrowLeft size={16} />
               Back
             </Button>
-            <h1 className="text-[1.5rem] font-bold text-gray-900">{selectedPdf}</h1>
+            <h1 className="text-[1.5rem] font-bold text-gray-900">{pdfName}</h1>
           </div>
         </div>
         <div className="flex-1 bg-white rounded-[0.75rem] shadow-sm border border-gray-200 overflow-hidden">

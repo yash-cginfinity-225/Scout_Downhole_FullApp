@@ -30,9 +30,30 @@ export default function FileUploader() {
     fetchFiles()
   }, [])
 
+  const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'pdf']
+
   const handleFilesSelected = (selectedFiles) => {
-    setStagedFiles((prev) => [...prev, ...selectedFiles])
-    setMessage('')
+    const validFiles = []
+    const invalidNames = []
+
+    selectedFiles.forEach((file) => {
+      const ext = file.name.split('.').pop().toLowerCase()
+      if (ALLOWED_EXTENSIONS.includes(ext)) {
+        validFiles.push(file)
+      } else {
+        invalidNames.push(file.name)
+      }
+    })
+
+    if (invalidNames.length > 0) {
+      setMessage(`Only Excel (.xlsx, .xls) and PDF files are allowed. Rejected: ${invalidNames.join(', ')}`)
+    } else {
+      setMessage('')
+    }
+
+    if (validFiles.length > 0) {
+      setStagedFiles((prev) => [...prev, ...validFiles])
+    }
   }
 
   const handleRemoveStaged = (index) => {
@@ -81,7 +102,7 @@ export default function FileUploader() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[2rem]">
         <div className="bg-white rounded-[0.75rem] p-[1.75rem] shadow-sm border border-gray-200">
           <h2 className="text-[1rem] font-semibold text-gray-800 mb-[1.25rem]">Upload Files</h2>
-          <DropZone onFilesSelected={handleFilesSelected} />
+          <DropZone onFilesSelected={handleFilesSelected} accept=".xlsx,.xls,.pdf" />
 
           {stagedFiles.length > 0 && (
             <div className="mt-[1rem] p-[1rem] bg-amber-50 border border-amber-300 rounded-[0.5rem]">

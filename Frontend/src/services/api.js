@@ -24,10 +24,19 @@ export const exportTableData = (tableName, search = '') =>
   api.get(`/api/tables/${tableName}/export`, { params: { search } })
 
 // Files
-export const uploadFiles = (formData) =>
-  api.post('/api/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+export const uploadFiles = (formData) => {
+  const url = `${API_URL}/api/files/upload`
+  return fetch(url, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+  }).then(async (res) => {
+    const text = await res.text()
+    const data = text ? JSON.parse(text) : {}
+    if (!res.ok) throw { response: { data } }
+    return { data }
   })
+}
 
 export const listFiles = () => api.get('/api/files/list')
 
@@ -36,8 +45,21 @@ export const deleteFile = (filename) => api.delete(`/api/files/${filename}`)
 export const getFileDownloadUrl = (filename) =>
   `${API_URL}/api/files/download/${filename}`
 
-export const getFileViewUrl = (filename) =>
-  `${API_URL}/api/files/view/${encodeURIComponent(filename)}`
+export const getFileViewUrl = (filename, fullPath) => {
+  const base = `${API_URL}/api/files/view/${encodeURIComponent(filename)}`
+  if (fullPath) {
+    return `${base}?path=${encodeURIComponent(fullPath)}`
+  }
+  return base
+}
+
+export const getFileAsArrayBuffer = (filename, fullPath) => {
+  let url = `/api/files/view/${encodeURIComponent(filename)}`
+  if (fullPath) {
+    url += `?path=${encodeURIComponent(fullPath)}`
+  }
+  return api.get(url, { responseType: 'arraybuffer' })
+}
 
 // Admin
 export const getLookupTable = () => api.get('/api/admin/lookup-table')
