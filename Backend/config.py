@@ -22,7 +22,7 @@ class Settings:
     SCOUT_MOTOR_PERFORMANCE_TABLE: str = os.getenv("SCOUT_MOTOR_PERFORMANCE_TABLE", "databricksnonprod.default.scout_motor_performance_report")
 
     DATABRICKS_VOLUME_PATH: str = os.getenv("DATABRICKS_VOLUME_PATH", "/Volumes/databricksnonprod/pdf_ingestion_data/pdf")
-    DATABRICKS_EXCEL_VOLUME_PATH: str = os.getenv("DATABRICKS_EXCEL_VOLUME_PATH", "/Volumes/databricksnonprod/excel_ingestion_data/excel")
+    DATABRICKS_EXCEL_VOLUME_PATH: str = os.getenv("DATABRICKS_EXCEL_VOLUME_PATH", "/Volumes/databricksnonprod/pdf_ingestion_data/excel")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
     @property
