@@ -1,10 +1,13 @@
 import re
+import logging
 from urllib.parse import quote
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import StreamingResponse, Response
 from config import settings
 from typing import List, Optional
 import httpx
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -145,11 +148,19 @@ async def view_file(filename: str, path: Optional[str] = Query(None)):
         # Strip dbfs: prefix stored by Databricks in the path column
         clean_path = path[len("dbfs:"):] if path.startswith("dbfs:") else path
 
-        # Validate path is within allowed volumes
+        # Validate path is within allowed volumes — accept paths that contain the configured volume
         allowed_prefixes = [settings.DATABRICKS_VOLUME_PATH, settings.DATABRICKS_EXCEL_VOLUME_PATH]
-        if not any(clean_path.startswith(prefix) for prefix in allowed_prefixes):
+        matched_prefix = next((p for p in allowed_prefixes if p in clean_path), None)
+        if matched_prefix:
+            # Trim any leading segments so the path begins with the allowed volume base
+            idx = clean_path.find(matched_prefix)
+            clean_path = clean_path[idx:]
+        else:
+            logger.warning("Requested path does not contain an allowed volume prefix: %s", clean_path)
             raise HTTPException(status_code=400, detail="Invalid file path")
-        if ".." in clean_path:
+
+        # Reject explicit path traversal segments, but allow filenames containing consecutive dots
+        if any(seg == '..' for seg in clean_path.split('/')):
             raise HTTPException(status_code=400, detail="Invalid file path")
 
         name = clean_path.rsplit("/", 1)[-1]
@@ -159,7 +170,7 @@ async def view_file(filename: str, path: Optional[str] = Query(None)):
     else:
         # Fallback: use filename only with configured volume path
         name = filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-        if not name or ".." in name:
+        if not name or name in {"..", "."}:
             raise HTTPException(status_code=400, detail="Invalid filename")
         view_url = _file_volume_url(name)
 

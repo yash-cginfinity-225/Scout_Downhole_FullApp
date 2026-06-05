@@ -31,20 +31,30 @@ def get_table_data(
     offset = (page - 1) * page_size
 
     try:
-        # Get total count
-        count_query = f"SELECT COUNT(*) as total FROM {table}"
-        if search:
-            count_query = f"SELECT COUNT(*) as total FROM {table} WHERE CAST(CONCAT_WS(' ', *) AS STRING) ILIKE '%{search}%'"
+        # Determine columns for the table (used to build a safe search expression)
+        _, sample_cols = execute_query(f"SELECT * FROM {table} LIMIT 1")
+
+        # If a search term is provided, build an INSTR-based predicate across columns
+        if search and sample_cols:
+            # Escape single quotes in the search literal
+            safe_search = search.replace("'", "''")
+
+            # Build a predicate that checks each column for the substring (case-insensitive)
+            # Use instr(lower(cast(col AS string)), lower('search')) > 0 to avoid LIKE wildcard semantics
+            predicates = [f"instr(lower(CAST(`{c}` AS STRING)), lower('{safe_search}')) > 0" for c in sample_cols]
+            where_clause = " OR ".join(predicates)
+
+            count_query = f"SELECT COUNT(*) as total FROM {table} WHERE {where_clause}"
+            query = f"SELECT * FROM {table} WHERE {where_clause} LIMIT {page_size} OFFSET {offset}"
+        else:
+            # Fallback: no search or couldn't determine columns — return full page
+            count_query = f"SELECT COUNT(*) as total FROM {table}"
+            query = f"SELECT * FROM {table} LIMIT {page_size} OFFSET {offset}"
 
         count_results, _ = execute_query(count_query)
         total = int(count_results[0]["total"]) if count_results else 0
 
-        # Get data
-        query = f"SELECT * FROM {table}"
-        if search:
-            query += f" WHERE CAST(CONCAT_WS(' ', *) AS STRING) ILIKE '%{search}%'"
-        query += f" LIMIT {page_size} OFFSET {offset}"
-
+        # Execute main query
         results, columns = execute_query(query)
 
         # Parse JSON strings in results
