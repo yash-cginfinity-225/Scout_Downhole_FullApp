@@ -1,10 +1,3 @@
-import sys
-import os
-# Ensure the Backend directory is on sys.path so that all intra-package
-# imports (config, database, routes.*) resolve correctly regardless of
-# whether this module is run as a script or imported as Backend.main.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
