@@ -1,7 +1,0 @@
-In the navbar, give only two options Baker and Halliburton.
-Under burton comes the Performance Report and the rest go under the Motor Performance Report.
-When i click on The navbar give option to select from the selector and customize the selector to math the theme for this.
-
-And add pagination in the bottom of the pages of frontend.
-And also load 100 records at a time and keep polliong with the backend till all records are not fetched.
-Keep it responsive. 
