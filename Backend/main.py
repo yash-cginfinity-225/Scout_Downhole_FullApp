@@ -1,10 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from config import settings
-from routes.auth import router as auth_router
-from routes.tables import router as tables_router
-from routes.files import router as files_router
-from routes.admin import router as admin_router
+# package-aware imports: when imported as `Backend.main` use relative imports;
+# when run as a script (or from the repo root) use top-level imports.
+if __package__:
+    from .config import settings
+    from .routes.auth import router as auth_router
+    from .routes.tables import router as tables_router
+    from .routes.files import router as files_router
+    from .routes.admin import router as admin_router
+else:
+    from config import settings
+    from routes.auth import router as auth_router
+    from routes.tables import router as tables_router
+    from routes.files import router as files_router
+    from routes.admin import router as admin_router
 
 app = FastAPI(title="Scout Data Platform API", version="1.0.0")
 
