@@ -5,3 +5,31 @@ command:
   - "0.0.0.0"
   - "--port"
   - "8000"
+
+env:
+  - name: DATABRICKS_HOST
+    valueFrom: DATABRICKS_HOST
+  - name: DATABRICKS_HTTP_PATH
+    valueFrom: DATABRICKS_HTTP_PATH
+  - name: DATABRICKS_TOKEN
+    valueFrom: DATABRICKS_TOKEN
+  - name: DATABRICKS_CATALOG
+    valueFrom: DATABRICKS_CATALOG
+  - name: DATABRICKS_SCHEMA
+    valueFrom: DATABRICKS_SCHEMA
+  - name: LOGIN_TABLE
+    valueFrom: LOGIN_TABLE
+  - name: BHA_TALLY_TABLE
+    valueFrom: BHA_TALLY_TABLE
+  - name: BHA_REPORT_TABLE
+    valueFrom: BHA_REPORT_TABLE
+  - name: BHA_EXTRACTED_TABLE
+    valueFrom: BHA_EXTRACTED_TABLE
+  - name: MOTOR_PERFORMANCE_TABLE
+    valueFrom: MOTOR_PERFORMANCE_TABLE
+  - name: DATABRICKS_VOLUME_PATH
+    valueFrom: DATABRICKS_VOLUME_PATH
+  - name: DATABRICKS_EXCEL_VOLUME_PATH
+    valueFrom: DATABRICKS_EXCEL_VOLUME_PATH
+  - name: FRONTEND_URL
+    valueFrom: FRONTEND_URL
