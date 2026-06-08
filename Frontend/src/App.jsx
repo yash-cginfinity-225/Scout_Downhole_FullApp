@@ -1,39 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './context/AuthContext'
-import Login from './pages/Login'
+import { AuthProvider } from './context/AuthContext'
 import FileUploader from './pages/FileUploader'
 import TableView from './pages/TableView'
 import SubTableView from './pages/SubTableView'
 import AdminLookup from './pages/AdminLookup'
 import Layout from './components/Layout'
 
-function ProtectedRoute({ children }) {
-  const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
-  return children
-}
-
-function AdminRoute({ children }) {
-  const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
-  if (!user.is_admin) return <Navigate to="/" replace />
-  return children
-}
-
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
+          <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/files" replace />} />
             <Route path="files" element={<FileUploader />} />
             <Route path="bha-tally" element={<TableView key="bha_tally" tableKey="bha_tally" title="BHA Tally" />} />
@@ -44,14 +22,7 @@ function App() {
             <Route path="scout-failure-report" element={<TableView key="scout_failure_report" tableKey="scout_failure_report" title="Scout Failure Report" />} />
             <Route path="scout-motor-performance" element={<TableView key="scout_motor_performance" tableKey="scout_motor_performance" title="Scout Motor Performance" />} />
             <Route path="sub-table" element={<SubTableView />} />
-            <Route
-              path="admin"
-              element={
-                <AdminRoute>
-                  <AdminLookup />
-                </AdminRoute>
-              }
-            />
+            <Route path="admin" element={<AdminLookup />} />
           </Route>
         </Routes>
       </BrowserRouter>

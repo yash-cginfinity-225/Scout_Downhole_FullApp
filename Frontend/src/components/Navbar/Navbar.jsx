@@ -87,24 +87,15 @@ export default function Navbar() {
           <NavDropdown key={category} label={category} items={items} />
         ))}
 
-        {user?.is_admin && (
-          <NavLink
-            to="/admin"
-            className={({ isActive }) =>
-              `flex items-center gap-[0.375rem] px-[0.875rem] py-[0.5rem] text-[0.8125rem] font-medium rounded-[0.5rem] whitespace-nowrap transition-all duration-200 ${isActive ? 'text-white bg-primary hover:bg-primary-dark' : 'text-amber-400 hover:text-white hover:bg-gray-800'}`
-            }
-          >
-            <Settings size={16} />
-            <span className="max-lg:hidden">Look Up</span>
-          </NavLink>
-        )}
-      </div>
-
-      <div className="flex items-center gap-[0.75rem] shrink-0">
-        <span className="text-[0.8125rem] font-medium text-gray-400">{user?.username}</span>
-        <Button variant="ghost" size="sm" onClick={logout}>
-          <LogOut size={16} />
-        </Button>
+        <NavLink
+          to="/admin"
+          className={({ isActive }) =>
+            `flex items-center gap-[0.375rem] px-[0.875rem] py-[0.5rem] text-[0.8125rem] font-medium rounded-[0.5rem] whitespace-nowrap transition-all duration-200 ${isActive ? 'text-white bg-primary hover:bg-primary-dark' : 'text-amber-400 hover:text-white hover:bg-gray-800'}`
+          }
+        >
+          <Settings size={16} />
+          <span className="max-lg:hidden">Look Up</span>
+        </NavLink>
       </div>
     </nav>
   )
