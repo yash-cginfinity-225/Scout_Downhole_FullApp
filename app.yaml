@@ -14,8 +14,6 @@ env:
     valueFrom: DATABRICKS_CATALOG
   - name: DATABRICKS_SCHEMA
     valueFrom: DATABRICKS_SCHEMA
-  - name: LOGIN_TABLE
-    valueFrom: LOGIN_TABLE
   - name: BHA_TALLY_TABLE
     valueFrom: BHA_TALLY_TABLE
   - name: BHA_REPORT_TABLE

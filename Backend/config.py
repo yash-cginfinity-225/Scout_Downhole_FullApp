@@ -11,7 +11,6 @@ class Settings:
     DATABRICKS_CATALOG: str = os.getenv("DATABRICKS_CATALOG", "databricksnonprod")
     DATABRICKS_SCHEMA: str = os.getenv("DATABRICKS_SCHEMA", "default")
 
-    LOGIN_TABLE: str = os.getenv("LOGIN_TABLE", "databricksnonprod.default.login")
     BHA_TALLY_TABLE: str = os.getenv("BHA_TALLY_TABLE", "databricksnonprod.default.halliburton_bha_tally")
     BHA_REPORT_TABLE: str = os.getenv("BHA_REPORT_TABLE", "databricksnonprod.default.halliburton_bha_report")
     BHA_EXTRACTED_TABLE: str = os.getenv("BHA_EXTRACTED_TABLE", "databricksnonprod.default.bha_extracted_reports")
