@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
 import FileUploader from './pages/FileUploader'
 import TableView from './pages/TableView'
 import SubTableView from './pages/SubTableView'
@@ -8,8 +7,7 @@ import Layout from './components/Layout'
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/files" replace />} />
@@ -26,7 +24,6 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
   )
 }
 

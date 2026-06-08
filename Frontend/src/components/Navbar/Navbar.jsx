@@ -1,7 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
-import { useAuth } from '../../context/AuthContext'
-import { LogOut, Upload, Settings, ChevronDown } from 'lucide-react'
+import { Upload, Settings, ChevronDown } from 'lucide-react'
 import Button from '../../atoms/Button/Button'
 
 const CATEGORIES = {
@@ -63,8 +62,6 @@ function NavDropdown({ label, items }) {
 }
 
 export default function Navbar() {
-  const { user, logout } = useAuth()
-
   return (
     <nav className="flex items-center gap-[1.5rem] px-[1.5rem] h-[4rem] bg-dark text-white shadow-lg sticky top-0 z-50">
       <div className="flex flex-col shrink-0">

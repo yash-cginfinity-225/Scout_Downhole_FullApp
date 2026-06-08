@@ -9,10 +9,6 @@ const api = axios.create({
   },
 })
 
-// Auth
-export const loginUser = (username, password) =>
-  api.post('/api/auth/login', { username, password })
-
 // Tables
 export const getTableData = (tableName, params = {}) =>
   api.get(`/api/tables/${tableName}`, { params })
