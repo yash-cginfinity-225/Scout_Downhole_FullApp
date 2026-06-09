@@ -1,5 +1,6 @@
 import re
 import logging
+from datetime import datetime
 from urllib.parse import quote
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import StreamingResponse, Response
@@ -64,6 +65,12 @@ async def upload_files(files: List[UploadFile] = File(...)):
     async with httpx.AsyncClient(timeout=120) as client:
         for file in files:
             safe_name = _safe_filename(file.filename)
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+            if "." in safe_name:
+                base, dot_ext = safe_name.rsplit(".", 1)
+                safe_name = f"{base}_{timestamp}.{dot_ext}"
+            else:
+                safe_name = f"{safe_name}_{timestamp}"
             ext = _ext(safe_name)
 
             if ext not in ALLOWED_EXTENSIONS:
