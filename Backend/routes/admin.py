@@ -13,6 +13,48 @@ LOOKUP_TABLE = "databricksnonprod.default.lookup_table_config"
 # Final pre-built unified data table
 FINAL_DATA_TABLE = "databricksnonprod.default.final_mapped_data"
 
+# Fixed column order for final_mapped_data to prevent column shifting
+FINAL_DATA_COLUMN_ORDER = [
+    "path", "SOURCE", "OPERATOR", "RIG", "JOB_NUM", "WELL", "COUNTY", "STATE",
+    "BHA", "BHA_DESC", "FORMATION", "DATE_IN", "DATE_OUT", "DEPTH_IN", "DEPTH_OUT",
+    "TOTAL_DRILL", "ROTATE_DRILL", "ROTATE_HRS", "ROTATE_ROP", "SLIDE_ROP", "AVG_ROP",
+    "LEAD_DD", "CO_MAN", "TIME_IN", "TIME_OUT", "CIRC_HOURS", "DRILLING_HOURS",
+    "SLIDE_DRILLED", "SLIDE_HOURS", "BIT_MAKE", "BIT_MODEL", "BIT_NUM", "TFA",
+    "GRADE_IN", "GRADE_OUT", "MUD_WEIGHT", "FLUID_TYPE", "SOLIDS", "PV", "YP",
+    "CHLORIDES", "BHT", "MOTOR_OD", "MOTOR_DESCRIPTION", "SN", "MOTOR_MODEL",
+    "MOTOR_MAKE", "BEND", "HOUSING_TYPE", "BIT_BEND", "LOBES", "STAGES",
+    "PLANNED_DLS", "ACT_DLS", "MOTOR_YIELD", "ON_BTM_PRESS", "RPM", "DIFF_PRESS",
+    "MAX_DIFFP", "ON_BTM_TQ", "MAX_TORQUE", "FLOW_RATE", "MAX_FLOW", "WOB",
+    "COMMENTS", "ADDITIONAL_COMMENTS", "UNPLANNED_TRIP", "MOTOR_FAILURE",
+    "MWD_FAILURE", "LIH", "TRIP_FOR_FAILURE", "NPT", "HRS_TO_FAIL", "NUM_STALLS",
+    "WASH_REAM_TIME", "DRY_REAM_TIME", "PU", "ROT", "SO", "SURFACEFINDINGS",
+    "SHOPFINDINGS", "TROUBLESHOOTING", "EVALUATION", "PULSERTYPE", "PULSER_SN",
+    "MWDTYPE", "BATTERY1_SN", "BATTERY2_SN", "BATTERY3_SN", "PULSER_DRIVER_SN",
+    "GAMMA_SN", "DIRECTIONAL_SN", "EM_SN", "LAT", "LON", "MOTOR", "RSS",
+    "CATASTROPHIC_FAILURE", "BRT_HRS", "PHASES", "MOTOR_KICKPAD_OD",
+    "MOTOR_SLEEVE_OD", "MOTOR_BEARING_TYPE", "REV_PER_GAL", "RSS_MAKE", "RSS_MODEL",
+    "RSS_DESCRIPTION", "HOLE_SIZE", "MAX_DLS", "REASON_POOH", "TUBE_OD",
+    "STATOR_FIT", "STATOR_VENDOR", "STATOR_TYPE", "RE_RUN", "DIRECT_BILL",
+    "BHT_MIN", "BHT_AVG", "BHT_MAX", "TVD_START", "TVD_END", "DD_COORDINATOR",
+    "MWD_COORDINATOR", "RSS_FAILED", "MWD_OOS", "MWD_COMMENTS", "IADC_FAILURE",
+    "NON_IADC_FAILURE", "OOS_FAILURE", "BHA_COMP_FAILED", "STB_1", "STB_2",
+    "STB_STRING", "FLEX", "INCIDENT_NUM", "MY", "MOTOR_LENGHT", "REPORTED_AS",
+    "FBH", "AVG_SLIDE_LENGHT", "NUM_OF_SLIDES", "AVG_ROT_DLS", "AVG_ROT_BR",
+    "AVG_ROT_TR", "BHA_ID", "DDS", "RSS_Stab", "Avg_SPP", "HTFO", "INC_IN",
+    "INC_OUT", "confidence", "human_review",
+]
+
+
+def _reorder_columns(columns, data):
+    """Reorder columns and data rows to match FINAL_DATA_COLUMN_ORDER."""
+    # Start with columns that are in the defined order
+    ordered = [c for c in FINAL_DATA_COLUMN_ORDER if c in columns]
+    # Append any new columns not in the predefined order at the end
+    ordered += [c for c in columns if c not in FINAL_DATA_COLUMN_ORDER]
+    # Reorder each row's data
+    ordered_data = [{col: row.get(col) for col in ordered} for row in data]
+    return ordered, ordered_data
+
 
 class LookupColumn(BaseModel):
     column_name: str
@@ -151,9 +193,10 @@ def get_mapped_data(
         query += f" LIMIT {page_size} OFFSET {offset}"
 
         results, columns = execute_query(query)
+        ordered_columns, ordered_data = _reorder_columns(columns, results)
         return {
-            "data": results,
-            "columns": columns,
+            "data": ordered_data,
+            "columns": ordered_columns,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -170,6 +213,7 @@ def export_mapped_data(search: Optional[str] = Query(None)):
         if search:
             query += f" WHERE CAST(CONCAT_WS(' ', *) AS STRING) ILIKE '%{search}%'"
         results, columns = execute_query(query)
-        return {"data": results, "columns": columns}
+        ordered_columns, ordered_data = _reorder_columns(columns, results)
+        return {"data": ordered_data, "columns": ordered_columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
