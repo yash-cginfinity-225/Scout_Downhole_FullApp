@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 from config import settings
@@ -29,10 +28,6 @@ REPO_ROOT = BASE_DIR.parent
 _possible_dirs = [REPO_ROOT / "Frontend" / "dist", REPO_ROOT / "Frontend" / "build"]
 FRONTEND_BUILD_DIR = next((p for p in _possible_dirs if p.exists()), None)
 
-if FRONTEND_BUILD_DIR:
-    app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD_DIR), html=True), name="frontend")
-
-
 @app.get("/", include_in_schema=False)
 def root():
     if FRONTEND_BUILD_DIR:
@@ -45,6 +40,11 @@ def root():
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_catchall(full_path: str):
     if FRONTEND_BUILD_DIR:
+        # First, try to serve the file as a static asset (JS, CSS, images, etc.)
+        file_path = FRONTEND_BUILD_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        # Otherwise, return index.html for SPA client-side routing
         index = FRONTEND_BUILD_DIR / "index.html"
         if index.exists():
             return FileResponse(str(index))
