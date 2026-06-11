@@ -119,9 +119,9 @@ export default function DataTable({ columns, data, onViewSubTable, onRowClick, o
         <table className="w-full text-[0.8125rem]" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
             <tr>
-              {columns.map((col) => (
+              {columns.map((col, idx) => (
                 <th key={col} className="sticky top-0 bg-gray-900 text-white px-[1rem] py-[0.875rem] text-left font-semibold text-[0.6875rem] uppercase tracking-[0.05em] whitespace-nowrap z-10 border-b border-gray-700">
-                  {col.replace(/_/g, ' ')}
+                  {col.replace(/_/g, ' ')} ({idx + 1})
                 </th>
               ))}
             </tr>
